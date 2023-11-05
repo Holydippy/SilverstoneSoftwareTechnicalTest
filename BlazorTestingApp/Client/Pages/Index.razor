@@ -1,0 +1,156 @@
+﻿@page "/"
+@using BlazorTestingApp.Client.Class;
+@using BlazorTestingApp.Client.Enum;
+@using BlazorTestingApp.Client.Methods;
+@using BlazorTestingApp.Client.Utils;
+@using Newtonsoft.Json;
+@using System.Text;
+
+<PageTitle>Home</PageTitle>
+
+<div style="width:100%">
+    <h1>Weather details</h1>
+
+
+    <div>
+            <p>
+                Please specify a location for weather details.
+            </p>
+
+
+            @if (historicalSearch.Count > 0)
+            {
+                <p>Privious searches will appear in a drop down box to the right, these can be used to quickly search for that location again.</p>
+            }
+    </div>
+
+    <div style="margin-bottom:10px;">
+        <input @bind="location" caption="City"/>
+        
+        @if (historicalSearch.Count>0)
+        {
+            <InputSelect caption="History" style="caption-side:top; margin-left:2px;" @bind-Value="@location">
+                @foreach (var item in historicalSearch)
+                {
+                    <option value="@item.HistoryLocation">@item.HistoryLocation</option>
+                }
+            </InputSelect>
+        }
+
+        <div class="form-group">
+            <label for="body">For Country please use GB/USA: </label>
+
+            <InputSelect @bind-Value="@comment.Country">
+                @foreach (var country in Enum.GetValues(typeof(Country)))
+                {
+                    <option value="@country">@country</option>
+                }
+            </InputSelect>
+        </div>
+        <button class="btn btn-primary" type="button" @onclick="OnClick">Search</button>
+    </div>
+</div>
+
+<ErrorBoundary>
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div style="background-color:red; border:solid; margin:5px; text-align:center">
+            @errorMessage
+        </div>
+    }
+</ErrorBoundary>
+
+<div style="border:solid; border-width:1px">
+    <div style="width:50%">
+        <p>Location: @locationVal</p>
+        <p>Current Temp: @cTempVal.ToString()</p>
+        <p>Humidity: @hVal.ToString()</p>
+        <p>Sunrise: @riseVal.ToString()</p>
+        <p>Sunset: @setVal.ToString()</p>
+    </div>
+</div>
+
+@code{
+    string location = "";
+    string locationVal = "";
+    decimal cTempVal;
+    decimal minTempVal;
+    decimal maxTempVal;
+    decimal hVal;
+    string riseVal = "";
+    string setVal = "";
+    string errorMessage = "";
+
+    List<HistoryItem> historicalSearch = new List<HistoryItem>();
+
+    private EditContext editContext;
+    private Comment comment = new Comment();
+    private HistoryItem history = new HistoryItem();
+
+    protected override void OnInitialized()
+    {
+        editContext = new EditContext(comment);
+
+        base.OnInitialized();
+    }
+
+    public async Task NewSearch(string item)
+    {
+        location = item;
+        await OnClick();
+    }
+
+    public async Task OnClick()
+    {
+        if (!string.IsNullOrEmpty(location))
+        {
+            errorMessage = "";
+            try
+            {
+                //API call here to get details.
+                MakeAPICall makeAPICall = new MakeAPICall();
+                WeatherData response = await MakeAPICall.APICallAsync(location, comment.Country.ToString());
+
+                //move api response to weather object
+                if (response != null)
+                {
+                    try
+                    {
+                        HistoryItem hItem = new HistoryItem();
+                        hItem.HistoryLocation = location;
+                        hItem.HistoryCountry = comment.Country;
+                        CreateWeatherClass createWeatherClass = new CreateWeatherClass();
+                        WeatherDataModel weather = new WeatherDataModel();
+                        weather = createWeatherClass.CreateObject(weather, response);
+
+                        if (weather != null)
+                        {
+                            locationVal = weather.Location;
+                            cTempVal = weather.CurrentTemp;
+                            hVal = weather.Humidity;
+                            riseVal = weather.Sunrise;
+                            setVal = weather.Sunset;
+                        }
+
+                        if (historicalSearch.Where(a=> a.HistoryLocation == location).Count() == 0)
+                        {
+                            historicalSearch.Add(hItem);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        errorMessage = ex.Message;
+                        StateHasChanged();
+                    }
+                }
+                StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                errorMessage = ex.Message;
+                StateHasChanged();
+            }
+           
+        }
+    }
+}
